@@ -1,1 +1,22 @@
 Backend/.idea/
+
+# ===== Android / Frontend =====
+# Gradle
+**/.gradle/
+**/build/
+
+# Android Studio
+**/.idea/
+**/*.iml
+**/local.properties
+
+# Logs
+*.log
+
+# macOS / Windows
+**/.DS_Store
+Thumbs.db
+
+# Keystore (防止误传签名文件)
+*.jks
+*.keystore
