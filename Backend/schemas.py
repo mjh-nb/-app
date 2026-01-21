@@ -3,46 +3,37 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 
 
-# --- 1. 前端发给后端的 (Request) ---
-# 前端每次都要把“传家宝”（关键信息）带过来
-
+# 前端发来的 Payload
 class Payload(BaseModel):
-    # 本次请求的内容
-    image_base64: Optional[str] = None  # 这次有没有发图？
-    user_text: Optional[str] = None  # 这次有没有说话？
+    image_base64: Optional[str] = None
+    user_text: Optional[str] = None
 
-    # 【核心变化】：前端存的“关键信息库”
-    # 这是一个字典，比如 {"tongue": "白腻", "main_symptom": "头疼"}
-    # 每次请求都要全量带过来
+    # 【核心修改】：saved_context 现在的结构变复杂了
+    # 建议前端把它拆成两部分存，或者混在一起存。
+    # 为了兼容队友的逻辑，我们假设 saved_context 包含两个 key:
+    # "symptoms": { "Headache": {"部位": "前额"} }
+    # "tongue": { "YellowCoating": 1 }
     saved_context: Dict[str, Any] = {}
 
-    # 历史对话记录 (用于 LLM 理解上下文流)
     history: List[Dict[str, str]] = []
 
 
 class ClientRequest(BaseModel):
     user_id: str = "default_user"
-    request_type: str  # "image" 或 "chat"
+    request_type: str
     payload: Payload
 
 
-# --- 2. 后端发给前端的 (Response) ---
-# 后端要告诉前端：“这次有没有新知识要你记下来？”
-
+# 后端返回的数据
 class ServerResponseData(BaseModel):
-    # 1. 给用户看的话
     reply_text: str
-
-    # 2. 是否产生了新信息 (True/False)
     has_new_context: bool
 
-    # 3. 需要前端更新/合并的关键信息 (如果有的话)
-    # 比如后端识别了舌头，这里返回 {"tongue": "红"}
-    # 前端拿到后，要把这个 merge 到自己的 saved_context 里
+    # 这里返回更新后的全量数据（或者增量数据），给前端覆盖保存
     new_context_to_save: Dict[str, Any] = {}
 
 
 class ServerResponse(BaseModel):
     status: str = "success"
     message: str = ""
-    data: ServerResponseData  # 嵌套上面的结构
+    data: ServerResponseData

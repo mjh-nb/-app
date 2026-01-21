@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- item_message_assistant.xml -->
+<!-- 职责：助手消息气泡布局（显示在左侧） -->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingHorizontal="8dp"
+    android:paddingVertical="4dp">
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start"
+        android:maxWidth="280dp"
+        android:orientation="horizontal">
+
+        <!-- 头像 -->
+        <ImageView
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_avatar"
+            android:contentDescription="中医助手"
+            android:padding="8dp"
+            android:src="@drawable/ic_tcm_logo"
+            app:tint="@color/primary"
+            xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:orientation="vertical">
+
+            <!-- 消息内容 -->
+            <TextView
+                android:id="@+id/tv_message_content"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_bubble_assistant"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="12dp"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp" />
+
+            <!-- 加载中指示器 -->
+            <ProgressBar
+                android:id="@+id/progress_loading"
+                style="@style/Widget.AppCompat.ProgressBar"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="4dp"
+                android:visibility="gone" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</FrameLayout>
