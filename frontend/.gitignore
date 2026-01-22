@@ -1,0 +1,32 @@
+# ===== Android / Frontend =====
+
+# Gradle
+.gradle/
+build/
+out/
+
+# Local config
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+
+# Kotlin
+.kotlin/
+
+# Native build
+.externalNativeBuild/
+.cxx/
+
+# Android Studio generated
+captures/
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+
+# Build outputs
+*.apk
+*.aab

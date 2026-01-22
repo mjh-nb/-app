@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- colors.xml -->
+<!-- 职责：定义应用颜色资源 -->
+<!-- 修改应用配色：修改此文件 -->
+<resources>
+    <!-- 主色调（中医绿） -->
+    <color name="primary">#2E7D32</color>
+    <color name="primary_dark">#1B5E20</color>
+    <color name="primary_light">#4CAF50</color>
+
+    <!-- 强调色 -->
+    <color name="accent">#FF9800</color>
+
+    <!-- 背景色 -->
+    <color name="background">#F5F5F5</color>
+    <color name="chat_background">#ECEFF1</color>
+
+    <!-- 文字颜色 -->
+    <color name="text_primary">#212121</color>
+    <color name="text_secondary">#757575</color>
+    <color name="text_hint">#9E9E9E</color>
+
+    <!-- 气泡颜色 -->
+    <color name="bubble_user">#2E7D32</color>
+    <color name="bubble_assistant">#FFFFFF</color>
+
+    <!-- 其他 -->
+    <color name="divider">#E0E0E0</color>
+    <color name="error">#F44336</color>
+    <color name="white">#FFFFFF</color>
+</resources>
