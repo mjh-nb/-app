@@ -116,25 +116,74 @@ def get_diagnosis_and_reply(user_text, history, saved_context, current_image_fea
     tongue_keys = list(current_tongue.keys())
     matches = calculate_disease_match(symptom_keys, tongue_keys)
 
-    # 5. 生成回复 Prompt
-    if not matches:
-        top_diagnosis = "未匹配到明显证候"
-        system_prompt = "你是一个中医助手。用户目前症状信息不足。请引导用户多描述一些身体感受。"
-    else:
-        top_diagnosis, top_score = matches[0]
-        if top_score < 40:
-            system_prompt = f"你是一个中医助手。目前最怀疑是【{top_diagnosis}】(匹配度{top_score}%)，但不敢确诊。请根据该证候的典型症状进行追问。"
-        else:
-            system_prompt = f"你是一个老中医。系统诊断用户为【{top_diagnosis}】。请给出该证型的解释和调理建议。"
+    # ================= 核心修改区域 =================
+    
+    # 获取最匹配的证型（如果有）
+    top_diagnosis, top_score = matches[0] if matches else ("暂无明显指向", 0)
 
-    # 6. 调用 DeepSeek 生成最终回复
+    # 构建 System Prompt，加入强约束
+    base_persona = """
+    你是一位经验丰富、说话亲切的老中医。
+    你的诊断风格是：**大胆假设，小心求证，但绝不啰嗦**。
+    """
+
+    if not matches:
+        # 情况 A: 信息太少，完全无法判断
+        system_prompt = f"""
+        {base_persona}
+        目前用户症状太少，无法判断。
+        【任务】：
+        1. 用口语化的方式安抚用户。
+        2. **只提出 1 个** 最想知道的身体感受问题（比如问“平时怕冷还是怕热”或“胃口怎么样”）。
+        3. **严禁**列出清单（1.2.3.4...）。
+        """
+    elif top_score < 40:
+        # 情况 B: 有怀疑方向，但分数不高（这就是截图里的情况）
+        # 策略：直接说怀疑什么，然后只追问 1 个核心点
+        system_prompt = f"""
+        {base_persona}
+        根据当前信息，你初步怀疑用户属于【{top_diagnosis}】（匹配度{top_score}%），但还需要确认。
+        
+        【回复策略 - 请严格遵守】：
+        1. **开门见山**：直接告诉用户“从目前症状看，我很怀疑你是{top_diagnosis}”。
+        2. **简单解释**：用一句话解释为什么（例如：因为你有...和...的症状）。
+        3. **单一追问**：为了确诊，请**只问 1 个**最关键的鉴别问题（挑一个该证型最典型但用户还没说的症状去问）。
+        4. **禁止**：严禁一次性问两个以上的问题！严禁使用“1. 2. 3.”的列表格式。像聊天一样自然地问出来。
+        """
+    else:
+        # 情况 C: 分数较高，基本确诊
+        system_prompt = f"""
+        {base_persona}
+        系统判定用户极大概率为【{top_diagnosis}】。
+        
+        【回复策略】：
+        1. 肯定地告知诊断结果。
+        2. 给出 2-3 条具体的调理建议（饮食、作息或中成药建议）。
+        3. 语气要像长辈一样关怀。
+        """
+
+    # 5. 调用 DeepSeek (Prompt 微调)
     try:
+        # 把已知的症状整理成自然语言喂给模型，防止它忘记
+        symptoms_desc = ", ".join([f"{k}:{v}" for k, v in current_symptoms.items()])
+        
+        user_content = f"""
+        【已知患者信息】：
+        - 已提取症状：{symptoms_desc}
+        - 舌象特征：{list(current_tongue.keys())}
+        
+        【患者刚才说】："{user_text}"
+        
+        请按照 System Prompt 的策略进行回复。不要重复我已经告诉过你的症状。
+        """
+
         reply_resp = client.chat.completions.create(
             model="deepseek-chat",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"用户症状：{current_symptoms}。用户刚才说：{user_text}"}
-            ]
+                {"role": "user", "content": user_content}
+            ],
+            temperature=0.7 # 稍微降低一点随机性，让它更听话
         )
         ai_msg = reply_resp.choices[0].message.content
     except Exception as e:
