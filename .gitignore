@@ -1,4 +1,5 @@
 Backend/.idea/
+Backend/__pycache__/
 
 # Gradle / Build
 **/.gradle/
