@@ -3,33 +3,42 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 
 
-# 前端发来的 Payload
+# --- 新增：专门用来接图片的结构 ---
+class Images(BaseModel):
+    # 对应 json 里的 "face" 和 "tongue"
+    # 前端可能不传，或者传 null，所以设为 Optional
+    face: Optional[str] = None
+    tongue: Optional[str] = None
+
+
+# --- 修改：Payload 结构 ---
 class Payload(BaseModel):
-    image_base64: Optional[str] = None
+    # 1. 图片变成了嵌套结构
+    images: Optional[Images] = None
+
+    # 2. 用户主诉
     user_text: Optional[str] = None
 
-    # 【核心修改】：saved_context 现在的结构变复杂了
-    # 建议前端把它拆成两部分存，或者混在一起存。
-    # 为了兼容队友的逻辑，我们假设 saved_context 包含两个 key:
-    # "symptoms": { "Headache": {"部位": "前额"} }
-    # "tongue": { "YellowCoating": 1 }
+    # 3. 关键信息库
+    # 前端截图里只有 profile，但我们之前的 symptoms (症状) 和 tongue (舌象数据) 也要存在这里
+    # 所以定义为 Dict[str, Any] 是最安全的，啥都能存
     saved_context: Dict[str, Any] = {}
 
+    # 4. 历史记录
     history: List[Dict[str, str]] = []
 
 
+# --- 修改：外层请求 ---
 class ClientRequest(BaseModel):
     user_id: str = "default_user"
-    request_type: str
+    request_type: str = "multi"  # 默认改为 multi
     payload: Payload
 
 
-# 后端返回的数据
+# --- 响应结构 (保持不变，或者根据需要微调) ---
 class ServerResponseData(BaseModel):
     reply_text: str
     has_new_context: bool
-
-    # 这里返回更新后的全量数据（或者增量数据），给前端覆盖保存
     new_context_to_save: Dict[str, Any] = {}
 
 
