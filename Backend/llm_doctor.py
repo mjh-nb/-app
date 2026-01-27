@@ -1,200 +1,273 @@
 # llm_doctor.py
 import json
+import re
+import pandas as pd
 from openai import OpenAI
-import data_loader  # 引入刚才写的数据模块
+import data_loader 
 
-# 初始化 DeepSeek 客户端 (请替换你的 Key)
 client = OpenAI(
-    api_key="sk-aad791214f9441a9b5af19b6c63f1ed3",
+    api_key="sk-aad791214f9441a9b5af19b6c63f1ed3", 
     base_url="https://api.deepseek.com"
 )
-
 
 class DoctorResult:
     def __init__(self, reply, new_info=None):
         self.reply = reply
-        self.new_info = new_info  # 这里的 new_info 是整个 context 的更新
+        self.new_info = new_info
 
+# ==========================================
+# PART 1: 基础工具 (新增：计算缺失症状)
+# ==========================================
 
-# --- 核心函数 1: 症状提取 (来自队友代码) ---
-def extract_complex_info(user_text):
-    if not user_text: return {}
+def clean_excel_cell(cell_text):
+    """清洗 Excel 单元格内容"""
+    text = str(cell_text)
+    text = text.replace("**", "")
+    text = re.sub(r'\(.*?\)', '', text)
+    text = re.sub(r'（.*?）', '', text)
+    keywords = re.split(r'[;；,，、]', text)
+    return [k.strip() for k in keywords if k.strip()]
 
-    # 动态构造 Prompt
-    schema_prompt = {}
-    for code, info in data_loader.SYMPTOM_SCHEMA.items():
-        schema_prompt[code] = {}
-        for i, dim in enumerate(info['dims']):
-            opts = info['options'][i]
-            schema_prompt[code][dim] = f"可选: {','.join(opts)}" if opts else "自由文本"
+def calculate_score_deterministic(table_key, user_symptoms):
+    """
+    算分逻辑升级：
+    除了计算得分，还计算 'missing_core' (缺失的核心症状)
+    """
+    df = data_loader.get_table(table_key)
+    if df.empty: return {}, []
+    
+    results = []
 
+    for index, row in df.iterrows():
+        score = 0
+        matched_core = []
+        matched_side = []
+        missing_core = [] # [新增] 用于存储缺失的核心症状
+        
+        pattern_name = row.get('辨证类型', '未知')
+        core_list = clean_excel_cell(row.get('核心临床表现', ''))
+        side_list = clean_excel_cell(row.get('可能/伴见表现', ''))
+
+        # 1. 核心症状匹配 (+10)
+        for c_sym in core_list:
+            is_found = False
+            for u_sym in user_symptoms:
+                # 双向匹配
+                if u_sym in c_sym or c_sym in u_sym:
+                    is_found = True
+                    break
+            
+            if is_found:
+                # 避免同一个用户症状给多个核心词加分 (虽然一般不会)
+                if c_sym not in matched_core: 
+                    score += 10
+                    matched_core.append(c_sym)
+            else:
+                # [新增] 没找到，记录为缺失
+                missing_core.append(c_sym)
+
+        # 2. 伴见症状匹配 (+3)
+        for u_sym in user_symptoms:
+            # 如果是核心词，跳过
+            if any(u_sym in c or c in u_sym for c in core_list):
+                continue
+            
+            for s_sym in side_list:
+                if u_sym in s_sym or s_sym in u_sym:
+                    if u_sym not in matched_side:
+                        score += 3
+                        matched_side.append(u_sym)
+                    break
+
+        if score > 0:
+            results.append({
+                "pattern": pattern_name,
+                "score": score,
+                "evidence_str": f"核心命中 {matched_core}(+10x{len(matched_core)})，伴见命中 {matched_side}(+3x{len(matched_side)})",
+                "missing_core": missing_core  # [新增] 返回缺失列表
+            })
+    
+    results.sort(key=lambda x: x['score'], reverse=True)
+    score_dict = {r['pattern']: r['score'] for r in results}
+    return score_dict, results
+
+# ==========================================
+# PART 2: 核心诊断逻辑 (不变)
+# ==========================================
+
+def normalize_user_symptoms(user_text):
+    """LLM 语义提取"""
+    if not user_text: return []
     prompt = f"""
-    你是一个医疗记录员。请分析用户输入。
-    【症状定义表】: 
-    {json.dumps(schema_prompt, ensure_ascii=False, indent=2)}
+    你是一个中医术语标准化助手。
     【用户输入】: "{user_text}"
-    【任务】:
-    1. 识别用户提到了哪些症状？
-    2. 对于每个症状，根据定义表提取具体的维度信息。
-    3. 严禁编造，只提取原文提到的信息。
-    【输出格式 (JSON)】:
-    {{ "Headache": {{ "部位": "前额" }} }}
-    没有提取到则返回 {{}}。不要Markdown格式。
+    【任务】: 将口语转化为标准中医术语列表。
+    【输出】: JSON列表，如 ["恶寒", "发热"]
     """
     try:
         response = client.chat.completions.create(
             model="deepseek-chat",
             messages=[{"role": "user", "content": prompt}],
-            stream=False
+            temperature=0.1
         )
-        raw = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
-        if not raw: return {}
-        return json.loads(raw)
-    except Exception as e:
-        print(f"[LLM] 提取出错: {e}")
-        return {}
+        content = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
+        return json.loads(content)
+    except:
+        return []
 
+def run_diagnosis_pipeline(current_symptoms_list):
+    """运行决策树"""
+    trace = []
+    
+    # 1. 八纲
+    scores_8_dict, _ = calculate_score_deterministic('八纲', current_symptoms_list)
+    s_biao = scores_8_dict.get('表证', 0)
+    s_li = scores_8_dict.get('里证', 0)
+    
+    target_table_key = ""
+    if s_biao >= s_li and s_biao > 0:
+        trace.append("八纲：表证")
+        s_han = scores_8_dict.get('寒证', 0)
+        s_re = scores_8_dict.get('热证', 0)
+        target_table_key = "六经" if s_han >= s_re else "卫气营血"
+    else:
+        trace.append("八纲：里证")
+        s_xu = scores_8_dict.get('虚证', 0)
+        s_shi = scores_8_dict.get('实证', 0)
+        target_table_key = "气血津液" if s_xu >= s_shi else "病因"
 
-# --- 核心函数 2: 证候匹配 (来自队友代码) ---
-def calculate_disease_match(symptom_keys, tongue_keys):
-    all_keys = set(symptom_keys) | set(tongue_keys)
-    scores = {}
-    for disease_name, rules in data_loader.DISEASE_DB.items():
-        current_score = 0
-        max_possible = 0
-        for code in rules['core']:
-            max_possible += 10
-            if code in all_keys: current_score += 10
-        for code in rules['side']:
-            max_possible += 3
-            if code in all_keys: current_score += 3
+    # 2. 特定辨证
+    best_specific = None
+    if target_table_key:
+        _, spec_results = calculate_score_deterministic(target_table_key, current_symptoms_list)
+        if spec_results:
+            best_specific = spec_results[0]
 
-        if max_possible > 0:
-            match_rate = int((current_score / max_possible) * 100)
-            if match_rate > 15:
-                scores[disease_name] = match_rate
-    return sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    # 3. 脏腑辨证
+    best_zangfu = None
+    _, zangfu_results = calculate_score_deterministic('脏腑', current_symptoms_list)
+    if zangfu_results:
+        best_zangfu = zangfu_results[0]
 
+    return {"specific": best_specific, "organ": best_zangfu}
 
-# --- 主逻辑: 诊断与回复 ---
+# ==========================================
+# PART 3: 主交互入口 (逻辑修改：定向追问)
+# ==========================================
+
 def get_diagnosis_and_reply(user_text, history, saved_context, current_image_features=None):
-    # 1. 解析前端传来的 Context
-    # 确保结构存在，防止报错
-    current_symptoms = saved_context.get("symptoms", {})
-    current_tongue = saved_context.get("tongue", {})
-
+    # 1. 上下文恢复
+    current_symptoms_list = saved_context.get("symptoms", [])
+    if not isinstance(current_symptoms_list, list): current_symptoms_list = []
     has_update = False
 
-    # 2. 处理图像特征 (如果有)
-    # image_processor 返回的是 {"tongue_substance": "舌红"} 这种字典
-    # 我们需要把它存入 current_tongue，这里假设 value=1 代表存在
-    if current_image_features:
-        # 这里需要做一个简单的映射，或者直接存
-        # 假设 current_image_features 里的 value 就是 code (例如 "PaleRed")
-        # 为简化，直接把 feature 的 value 当作 key 存入 tongue 字典
-        for k, v in current_image_features.items():
-            if k in ["tongue_substance", "tongue_coating"]:
-                # 注意：这里可能需要根据你的 Excel 映射一下中文到英文Code
-                # 暂时假设 v 就是 Code，或者后续匹配算法能处理中文
-                current_tongue[v] = 1
-        has_update = True
-
-    # 3. 处理文本提取 (如果有)
+    # 2. 症状更新
     if user_text:
-        new_extracted = extract_complex_info(user_text)
-        if new_extracted:
-            # 合并症状
-            for code, details in new_extracted.items():
-                if code not in current_symptoms:
-                    current_symptoms[code] = details
-                else:
-                    current_symptoms[code].update(details)
+        new_symptoms = normalize_user_symptoms(user_text)
+        if new_symptoms:
+            updated_set = set(current_symptoms_list) | set(new_symptoms)
+            current_symptoms_list = list(updated_set)
             has_update = True
 
-    # 4. 执行证候匹配算法
-    symptom_keys = list(current_symptoms.keys())
-    tongue_keys = list(current_tongue.keys())
-    matches = calculate_disease_match(symptom_keys, tongue_keys)
-
-    # ================= 核心修改区域 =================
+    # 3. 诊断
+    diag_result = run_diagnosis_pipeline(current_symptoms_list)
+    top_match = diag_result['specific'] or diag_result['organ']
     
-    # 获取最匹配的证型（如果有）
-    top_diagnosis, top_score = matches[0] if matches else ("暂无明显指向", 0)
-
-    # 构建 System Prompt，加入强约束
+    # 4. Prompt 构建
     base_persona = """
-    你是一位经验丰富、说话亲切的老中医。
-    你的诊断风格是：**大胆假设，小心求证，但绝不啰嗦**。
+    你是一位经验丰富的中医。风格：亲切、专业、严谨。
+    请仔细阅读【对话历史】，**绝对不要**重复询问用户已经回答过的问题。
     """
+    
+    diagnosis_status = "UNKNOWN"
 
-    if not matches:
-        # 情况 A: 信息太少，完全无法判断
+    if not top_match:
+        # ============================================================
+        # A. 无方向 -> 改为【八纲定性】问诊
+        # ============================================================
         system_prompt = f"""
         {base_persona}
-        目前用户症状太少，无法判断。
-        【任务】：
-        1. 用口语化的方式安抚用户。
-        2. **只提出 1 个** 最想知道的身体感受问题（比如问“平时怕冷还是怕热”或“胃口怎么样”）。
-        3. **严禁**列出清单（1.2.3.4...）。
-        """
-    elif top_score < 40:
-        # 情况 B: 有怀疑方向，但分数不高（这就是截图里的情况）
-        # 策略：直接说怀疑什么，然后只追问 1 个核心点
-        system_prompt = f"""
-        {base_persona}
-        根据当前信息，你初步怀疑用户属于【{top_diagnosis}】（匹配度{top_score}%），但还需要确认。
+        目前用户提供的症状 ({current_symptoms_list}) 过于稀缺，无法指向具体的脏腑或病邪。
+        此时需要先进行【八纲辨证】（表里、寒热、虚实）的定性。
         
-        【回复策略 - 请严格遵守】：
-        1. **开门见山**：直接告诉用户“从目前症状看，我很怀疑你是{top_diagnosis}”。
-        2. **简单解释**：用一句话解释为什么（例如：因为你有...和...的症状）。
-        3. **单一追问**：为了确诊，请**只问 1 个**最关键的鉴别问题（挑一个该证型最典型但用户还没说的症状去问）。
-        4. **禁止**：严禁一次性问两个以上的问题！严禁使用“1. 2. 3.”的列表格式。像聊天一样自然地问出来。
+        【任务】：
+        请基于“八纲辨证”的逻辑，选择 **一个** 目前最不清楚的维度进行自然询问。
+        
+        参考问诊方向（仅供参考，请转化为口语）：
+        1. **辨表里**：如果有头痛/恶寒/发热，优先问这些（判断病位深浅）。
+        2. **辨寒热**：问平时怕冷还是怕热？口渴吗？喜欢喝热水还是冷水？小便颜色清还是黄？
+        3. **辨虚实**：问发病多久了？是感觉身体沉重乏力（虚），还是疼痛剧烈、按压更痛（实）？
+        
+        **要求**：
+        1. 像老医生聊天一样自然，**不要**暴露“我要辨别八纲”这种术语。
+        2. **一次只问 1 个** 维度的相关问题，不要堆砌问题。
         """
     else:
-        # 情况 C: 分数较高，基本确诊
-        system_prompt = f"""
-        {base_persona}
-        系统判定用户极大概率为【{top_diagnosis}】。
+        score = top_match['score']
+        name = top_match['pattern']
+        missing_symptoms = top_match.get('missing_core', []) # 获取缺失的核心症状
         
-        【回复策略】：
-        1. 肯定地告知诊断结果。
-        2. 给出 2-3 条具体的调理建议（饮食、作息或中成药建议）。
-        3. 语气要像长辈一样关怀。
-        """
+        # 转换成字符串供Prompt使用
+        missing_str = "、".join(missing_symptoms) if missing_symptoms else "无"
 
-    # 5. 调用 DeepSeek (Prompt 微调)
+        if score < 40: # 阈值 (比如40分才算比较稳)
+            # B. 疑似 -> 定向追问 [核心修改点]
+            diagnosis_status = "SUSPECTED"
+            system_prompt = f"""
+            {base_persona}
+            【系统诊断现状】：
+            1. 最怀疑证型：【{name}】（匹配度 {score}分，尚未达到确诊标准）。
+            2. 已有证据：{top_match['evidence_str']}。
+            3. **缺失的核心证据**：【{missing_str}】。
+            
+            【任务】：
+            1. 告知用户你怀疑是“{name}”方向。
+            2. **验证假设**：从上述【缺失的核心证据】中，挑选 1-2 个最关键的症状进行询问。
+            例如：如果缺失“口苦”，就问“平时嘴里会有苦味吗？”
+            3. 严禁询问与该证型无关的问题，严禁重复历史记录里问过的问题。
+            """
+        else:
+            # C. 确诊 -> 建议
+            diagnosis_status = "CONFIRMED"
+            system_prompt = f"""
+            {base_persona}
+            【系统诊断结论】：
+            确诊为【{name}】（得分 {score}，置信度高）。
+            依据：{top_match['evidence_str']}。
+            
+            【任务】：
+            1. 清晰告知诊断结果。
+            2. 解释为什么是这个病（引用上述依据）。
+            3. 给出针对【{name}】的饮食、作息建议。
+            """
+
+    # 5. 组装消息
+    messages_payload = [{"role": "system", "content": system_prompt}]
+    
+    if history and isinstance(history, list):
+        for h in history:
+            if isinstance(h, dict) and h.get('role') in ['user', 'assistant']:
+                messages_payload.append({"role": h['role'], "content": str(h['content'])})
+
+    final_user_input = f"【已知症状】：{current_symptoms_list}\n【用户输入】：{user_text}"
+    messages_payload.append({"role": "user", "content": final_user_input})
+
+    # 6. 调用
     try:
-        # 把已知的症状整理成自然语言喂给模型，防止它忘记
-        symptoms_desc = ", ".join([f"{k}:{v}" for k, v in current_symptoms.items()])
-        
-        user_content = f"""
-        【已知患者信息】：
-        - 已提取症状：{symptoms_desc}
-        - 舌象特征：{list(current_tongue.keys())}
-        
-        【患者刚才说】："{user_text}"
-        
-        请按照 System Prompt 的策略进行回复。不要重复我已经告诉过你的症状。
-        """
-
         reply_resp = client.chat.completions.create(
             model="deepseek-chat",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content}
-            ],
-            temperature=0.7 # 稍微降低一点随机性，让它更听话
+            messages=messages_payload,
+            temperature=0.6 # 稍微降低温度，让它严格执行提问指令
         )
-        ai_msg = reply_resp.choices[0].message.content
+        ai_reply = reply_resp.choices[0].message.content
     except Exception as e:
-        ai_msg = f"系统繁忙: {str(e)}"
+        ai_reply = f"系统繁忙: {e}"
 
-    # 7. 返回结果
-    # 构造新的 Context 结构返回给前端保存
-    new_context_full = {
-        "symptoms": current_symptoms,
-        "tongue": current_tongue,
-        "diagnosis": top_diagnosis  # 也可以把诊断结果存下来
+    # 7. 返回
+    new_context = {
+        "symptoms": current_symptoms_list,
+        "last_diag_name": top_match['pattern'] if top_match else None,
+        "status": diagnosis_status
     }
 
-    return DoctorResult(reply=ai_msg, new_info=new_context_full if has_update else None)
+    return DoctorResult(reply=ai_reply, new_info=new_context if has_update else None)
