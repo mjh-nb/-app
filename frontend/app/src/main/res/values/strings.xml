@@ -4,7 +4,7 @@
 <!-- 修改 UI 文案：修改此文件 -->
 <resources>
     <!-- 应用名称 -->
-    <string name="app_name">智慧中医问诊</string>
+    <string name="app_name">岐黄AI</string>
 
     <!-- 启动页 -->
     <string name="slogan">传承中医智慧，守护健康生活</string>

@@ -7,9 +7,11 @@ import java.util.Map;
 /**
  * TCMResponse - 响应数据模型
  * 职责：解析后端返回的 JSON 响应
- * 
+
  * 修改 JSON 字段：修改 @SerializedName 注解的值
  */
+
+
 public class TCMResponse {
 
     @SerializedName("status")
@@ -72,6 +74,7 @@ public class TCMResponse {
         }
         return null;
     }
+
 
     /**
      * Data - 响应数据内部类

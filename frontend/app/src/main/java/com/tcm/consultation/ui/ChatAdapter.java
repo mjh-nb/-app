@@ -1,5 +1,6 @@
 package com.tcm.consultation.ui;
 
+import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,9 +16,14 @@ import com.tcm.consultation.model.ChatMessage;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.noties.markwon.Markwon;
+import io.noties.markwon.ext.strikethrough.StrikethroughPlugin;
+import io.noties.markwon.ext.tables.TablePlugin;
+
 /**
  * ChatAdapter - 聊天消息列表适配器
  * 职责：管理聊天消息的显示，区分用户消息和助手消息
+ * 新增：支持 Markdown 渲染
  */
 public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
@@ -25,9 +31,25 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     private static final int TYPE_ASSISTANT = 2;
 
     private final List<ChatMessage> messages;
+    
+    // 新增：Markdown 渲染器
+    private Markwon markwon;
+    private Context context;
 
     public ChatAdapter() {
         this.messages = new ArrayList<>();
+    }
+
+    @Override
+    public void onAttachedToRecyclerView(@NonNull RecyclerView recyclerView) {
+        super.onAttachedToRecyclerView(recyclerView);
+        context = recyclerView.getContext();
+        
+        // 初始化 Markwon，支持加粗、斜体、删除线、表格等
+        markwon = Markwon.builder(context)
+                .usePlugin(StrikethroughPlugin.create())
+                .usePlugin(TablePlugin.create(context))
+                .build();
     }
 
     @Override
@@ -55,7 +77,7 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         if (holder instanceof UserMessageViewHolder) {
             ((UserMessageViewHolder) holder).bind(message);
         } else if (holder instanceof AssistantMessageViewHolder) {
-            ((AssistantMessageViewHolder) holder).bind(message);
+            ((AssistantMessageViewHolder) holder).bind(message, markwon);
         }
     }
 
@@ -130,6 +152,7 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     /**
      * 助手消息 ViewHolder
+     * 修改：支持 Markdown 渲染
      */
     static class AssistantMessageViewHolder extends RecyclerView.ViewHolder {
         private final TextView tvContent;
@@ -141,13 +164,20 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             progressBar = itemView.findViewById(R.id.progress_loading);
         }
 
-        void bind(ChatMessage message) {
-            tvContent.setText(message.getContent());
-
+        void bind(ChatMessage message, Markwon markwon) {
             if (message.isLoading()) {
                 progressBar.setVisibility(View.VISIBLE);
+                tvContent.setText("正在分析中...");
             } else {
                 progressBar.setVisibility(View.GONE);
+                
+                // 使用 Markwon 渲染 Markdown 格式的文本
+                String content = message.getContent();
+                if (markwon != null && content != null) {
+                    markwon.setMarkdown(tvContent, content);
+                } else {
+                    tvContent.setText(content);
+                }
             }
         }
     }

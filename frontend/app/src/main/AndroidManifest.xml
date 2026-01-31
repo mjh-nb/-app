@@ -69,6 +69,21 @@
             android:name=".ui.HistoryActivity"
             android:exported="false" />
 
+
+        <activity
+            android:name=".ui.ImageCropActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.NoActionBar" />
+
+        <activity
+            android:name=".ui.CustomCameraActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.NoActionBar" />
+
+
+
+
+
         <!-- FileProvider 用于相机拍照 -->
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -83,3 +98,6 @@
     </application>
 
 </manifest>
+
+
+

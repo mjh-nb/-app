@@ -57,6 +57,7 @@ import java.util.Map;
 /**
  * ChatActivity - 聊天问诊页
  * 职责：核心问诊功能，包括文本输入、图片上传、消息显示、网络请求等
+ * 新增：图片裁剪功能、自定义相机引导框
  */
 public class ChatActivity extends AppCompatActivity {
 
@@ -83,10 +84,16 @@ public class ChatActivity extends AppCompatActivity {
 
     private static final int PERMISSION_REQUEST_CAMERA = 100;
 
+    // 相册选择 Launcher
     private ActivityResultLauncher<Intent> tongueGalleryLauncher;
     private ActivityResultLauncher<Intent> faceGalleryLauncher;
-    private ActivityResultLauncher<Uri> tongueCameraLauncher;
-    private ActivityResultLauncher<Uri> faceCameraLauncher;
+    
+    // 裁剪页面 Launcher
+    private ActivityResultLauncher<Intent> tongueCropLauncher;
+    private ActivityResultLauncher<Intent> faceCropLauncher;
+    
+    // 自定义相机 Launcher
+    private ActivityResultLauncher<Intent> customCameraLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -102,7 +109,7 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     /**
-     * 【新增】点击空白处收起键盘
+     * 点击空白处收起键盘
      */
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
@@ -116,7 +123,6 @@ public class ChatActivity extends AppCompatActivity {
                 int right = left + v.getWidth();
                 int bottom = top + v.getHeight();
 
-                // 如果点击位置不在 EditText 范围内，收起键盘
                 if (!(ev.getRawX() >= left && ev.getRawX() <= right
                         && ev.getRawY() >= top && ev.getRawY() <= bottom)) {
                     hideKeyboard();
@@ -127,7 +133,7 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     /**
-     * 【新增】隐藏软键盘
+     * 隐藏软键盘
      */
     private void hideKeyboard() {
         View view = getCurrentFocus();
@@ -136,17 +142,19 @@ public class ChatActivity extends AppCompatActivity {
             if (imm != null) {
                 imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
             }
-            // 清除焦点
             etInput.clearFocus();
         }
     }
 
     private void initLaunchers() {
+        // 相册选择 - 选择后跳转到裁剪页面
         tongueGalleryLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                        handleImageResult(result.getData().getData(), Constants.IMAGE_TYPE_TONGUE);
+                        Uri selectedUri = result.getData().getData();
+                        // 跳转到裁剪页面
+                        openCropActivity(selectedUri, Constants.IMAGE_TYPE_TONGUE);
                     }
                 });
 
@@ -154,25 +162,60 @@ public class ChatActivity extends AppCompatActivity {
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                        handleImageResult(result.getData().getData(), Constants.IMAGE_TYPE_FACE);
+                        Uri selectedUri = result.getData().getData();
+                        // 跳转到裁剪页面
+                        openCropActivity(selectedUri, Constants.IMAGE_TYPE_FACE);
                     }
                 });
 
-        tongueCameraLauncher = registerForActivityResult(
-                new ActivityResultContracts.TakePicture(),
-                success -> {
-                    if (success && currentPhotoPath != null) {
-                        handleCameraResult(currentPhotoPath, Constants.IMAGE_TYPE_TONGUE);
+        // 裁剪页面返回
+        tongueCropLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        Uri croppedUri = result.getData().getParcelableExtra(
+                                ImageCropActivity.EXTRA_CROPPED_URI);
+                        handleImageResult(croppedUri, Constants.IMAGE_TYPE_TONGUE);
                     }
                 });
 
-        faceCameraLauncher = registerForActivityResult(
-                new ActivityResultContracts.TakePicture(),
-                success -> {
-                    if (success && currentPhotoPath != null) {
-                        handleCameraResult(currentPhotoPath, Constants.IMAGE_TYPE_FACE);
+        faceCropLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        Uri croppedUri = result.getData().getParcelableExtra(
+                                ImageCropActivity.EXTRA_CROPPED_URI);
+                        handleImageResult(croppedUri, Constants.IMAGE_TYPE_FACE);
                     }
                 });
+
+        // 自定义相机返回
+        customCameraLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        Uri photoUri = result.getData().getParcelableExtra(
+                                CustomCameraActivity.EXTRA_PHOTO_URI);
+                        int imageType = result.getData().getIntExtra(
+                                CustomCameraActivity.EXTRA_IMAGE_TYPE, Constants.IMAGE_TYPE_TONGUE);
+                        handleImageResult(photoUri, imageType);
+                    }
+                });
+    }
+
+    /**
+     * 打开裁剪页面
+     */
+    private void openCropActivity(Uri imageUri, int imageType) {
+        Intent intent = new Intent(this, ImageCropActivity.class);
+        intent.putExtra(ImageCropActivity.EXTRA_IMAGE_URI, imageUri);
+        intent.putExtra(ImageCropActivity.EXTRA_IMAGE_TYPE, imageType);
+
+        if (imageType == Constants.IMAGE_TYPE_TONGUE) {
+            tongueCropLauncher.launch(intent);
+        } else {
+            faceCropLauncher.launch(intent);
+        }
     }
 
     private void initToolbar() {
@@ -204,7 +247,6 @@ public class ChatActivity extends AppCompatActivity {
         adapter = new ChatAdapter();
         recyclerView.setAdapter(adapter);
 
-        // 【新增】点击 RecyclerView 收起键盘
         recyclerView.setOnTouchListener((v, event) -> {
             hideKeyboard();
             return false;
@@ -275,7 +317,6 @@ public class ChatActivity extends AppCompatActivity {
             return;
         }
 
-        // 【新增】发送前收起键盘
         hideKeyboard();
 
         StringBuilder contentBuilder = new StringBuilder();
@@ -432,33 +473,13 @@ public class ChatActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * 拍照 - 使用自定义相机（带引导框）
+     */
     private void takePhoto(int imageType) {
-        try {
-            File photoFile = createImageFile();
-            if (photoFile != null) {
-                Uri photoUri = FileProvider.getUriForFile(this,
-                        getPackageName() + ".fileprovider", photoFile);
-
-                if (imageType == Constants.IMAGE_TYPE_TONGUE) {
-                    tongueCameraLauncher.launch(photoUri);
-                } else {
-                    faceCameraLauncher.launch(photoUri);
-                }
-            }
-        } catch (IOException e) {
-            Toast.makeText(this, "创建图片文件失败", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private File createImageFile() throws IOException {
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.CHINA).format(new Date());
-        String imageFileName = "TCM_" + timeStamp + "_";
-
-        File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-        File image = File.createTempFile(imageFileName, ".jpg", storageDir);
-
-        currentPhotoPath = image.getAbsolutePath();
-        return image;
+        Intent intent = new Intent(this, CustomCameraActivity.class);
+        intent.putExtra(CustomCameraActivity.EXTRA_IMAGE_TYPE, imageType);
+        customCameraLauncher.launch(intent);
     }
 
     private void openGallery(int imageType) {
@@ -477,29 +498,6 @@ public class ChatActivity extends AppCompatActivity {
 
         new Thread(() -> {
             String base64 = ImageUtils.uriToBase64(this, uri);
-            runOnUiThread(() -> {
-                if (base64 != null) {
-                    if (imageType == Constants.IMAGE_TYPE_TONGUE) {
-                        tongueBase64 = base64;
-                        tongueUri = uri;
-                        showTonguePreview(uri);
-                    } else {
-                        faceBase64 = base64;
-                        faceUri = uri;
-                        showFacePreview(uri);
-                    }
-                    updateSendButtonState();
-                } else {
-                    Toast.makeText(this, "图片处理失败", Toast.LENGTH_SHORT).show();
-                }
-            });
-        }).start();
-    }
-
-    private void handleCameraResult(String filePath, int imageType) {
-        new Thread(() -> {
-            String base64 = ImageUtils.fileToBase64(filePath);
-            Uri uri = Uri.fromFile(new File(filePath));
             runOnUiThread(() -> {
                 if (base64 != null) {
                     if (imageType == Constants.IMAGE_TYPE_TONGUE) {

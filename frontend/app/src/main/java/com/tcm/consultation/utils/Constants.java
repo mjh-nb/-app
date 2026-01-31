@@ -17,8 +17,8 @@ public final class Constants {
 
     // ==================== 服务器配置 ====================
     // 后端服务器基础地址（修改服务器地址改这里）
-    public static final String BASE_URL = "https://37e8c80f.r38.cpolar.top";
-
+    public static final String BASE_URL = "http://frp-can.com:44741";
+    // https://2bb42564.r29.cpolar.top
     // API 端点路径
     public static final String API_ENDPOINT = "/api/tcm_process";
 
