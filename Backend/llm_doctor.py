@@ -24,6 +24,17 @@ class DoctorResult:
 # PART 1: 基础工具 (升级版数据清洗)
 # ==========================================
 
+def remove_markdown_symbol(text):
+    if not text: return ""
+    # 去除 **加粗**
+    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+    # 去除 *斜体*
+    text = re.sub(r'\*(.*?)\*', r'\1', text)
+    # 去除标题和链接
+    text = text.replace("##", "").replace("#", "")
+    text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
+    return text
+
 def clean_excel_cell(cell_text):
     text = str(cell_text)
     
@@ -407,7 +418,12 @@ def get_diagnosis_and_reply(user_text, history, saved_context, current_image_fea
     base_persona = f"""
     你是一位经验丰富的中医。{profile_desc}
     风格：亲切、专业、严谨。
-    请仔细阅读【对话历史】，**绝对不要**重复询问用户已经回答过的问题。
+    请仔细阅读【对话历史】，不要重复询问用户已经回答过的问题。
+
+    ⚠️【格式严格要求】：
+    1. **绝对禁止**使用Markdown格式。
+    2. **不要**使用 **加粗**、# 标题 等符号。
+    3. 仅输出纯文本，就像微信聊天一样。
     """
 
     if final_decision:
@@ -482,6 +498,8 @@ def get_diagnosis_and_reply(user_text, history, saved_context, current_image_fea
             model="deepseek-chat", messages=messages_payload, temperature=0.6
         )
         ai_reply = reply_resp.choices[0].message.content
+
+        ai_reply = remove_markdown_symbol(ai_reply)
     except Exception as e:
         ai_reply = f"系统繁忙: {e}"
 

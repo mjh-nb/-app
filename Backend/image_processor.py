@@ -105,3 +105,77 @@ def analyze_image_features(image_base64_str):
         if os.path.exists(image_path):
             os.remove(image_path)
 
+
+def analyze_face_features(image_base64_str):
+    """
+    【新增】面诊专用函数
+    """
+    print("【1. 图像模块】开始处理面部照片...")
+
+    # 1. 解码图片 (和之前一样)
+    if "," in image_base64_str:
+        image_base64_str = image_base64_str.split(",")[1]
+    img_data = base64.b64decode(image_base64_str)
+
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+    temp_file.write(img_data)
+    temp_file.close()
+    image_path = temp_file.name
+
+    try:
+        # --- 2. 构造面诊 Prompt ---
+        # 这里的候选项必须是你 Excel 表格里有的词，否则算分算不到
+        # 常见面诊词汇：面色淡白, 面色红, 面色萎黄, 面色晦暗, 面色青紫
+
+        candidates_face = "面色淡白, 面色红, 面色萎黄, 面色晦暗, 面色青紫, 面色潮红, 颧红"
+
+        prompt = f"""
+        你是一位中医面诊专家。请观察这张人像照片的面部气色。
+        请严格根据画面内容，从下方的【标准候选项】中，选出最符合的一个描述。
+
+        注意：
+        1. 必须完全使用我提供的词汇，不要自己造词。
+        2. 重点关注皮肤颜色和光泽。
+
+        【标准候选项】：{candidates_face}
+
+        请仅返回一个纯 JSON 字符串，格式如下：
+        {{
+            "visual_summary": "面色...（一句话总结）",
+            "face_color": "选出的标准词汇"
+        }}
+        """
+
+        # --- 3. 调用 API (和之前一样) ---
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"image": f"file://{image_path}"},
+                    {"text": prompt}
+                ]
+            }
+        ]
+
+        response = dashscope.MultiModalConversation.call(
+            model='qwen-vl-max',
+            messages=messages
+        )
+
+        if response.status_code == HTTPStatus.OK:
+            result_text = response.output.choices[0].message.content[0]['text']
+            clean_json = result_text.replace("```json", "").replace("```", "").strip()
+            features = json.loads(clean_json)
+            print(f"【面诊结果】: {features}")
+            return features
+        else:
+            raise Exception("API调用失败")
+
+    except Exception as e:
+        print(f"面诊出错: {e}")
+        return {}  # 出错返回空字典，不影响主流程
+
+    finally:
+        if os.path.exists(image_path):
+            os.remove(image_path)
+

@@ -37,9 +37,13 @@ async def main_entry(request: ClientRequest):
         # 步骤 B: 检查有没有发面部照片 (预留)
         # ==========================================
         if payload.images and payload.images.face:
-            # 暂时还没有面部处理函数，先打印一下
-            print("收到面部照片，暂未处理")
-            # current_image_features.update(face_features)
+            # 1. 调用刚才写的面诊函数
+            face_features = image_processor.analyze_face_features(payload.images.face)
+
+            # 2. 把结果合并到总特征里
+            # 假设 face_features 是 {"face_color": "面色萎黄"}
+            # 它会被自动加入 current_image_features
+            current_image_features.update(face_features)
 
         # ==========================================
         # 步骤 C: 全权交给医生
