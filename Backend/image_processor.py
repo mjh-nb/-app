@@ -6,35 +6,30 @@ import tempfile
 from http import HTTPStatus
 import dashscope
 
-dashscope.api_key = "sk-588a2db89b454327ad4cc1a43ffedc7c"
-
+# 请在环境变量中配置 DASH_SCOPE_API_KEY，此处为演示Key
+dashscope.api_key = "DASHSCOPE_API_KEY"
 
 def analyze_image_features(image_base64_str):
     """
-    接收 Base64 图片，调用视觉大模型，返回符合限定词的特征。
+    处理舌象图片：Base64解码 -> 临时文件存储 -> 调用VL大模型 -> 提取标准化特征
     """
-    print("【1. 图像模块】开始处理图片...")
+    print("【1. 图像模块】开始处理舌象图片...")
 
-    # --- 1. Base64 解码并保存为临时文件 ---
-    # 大模型 API 通常需要一个文件路径或者 URL
-    # 我们创建一个临时文件来存这张图
-
-    # 去掉可能存在的 header (例如 "data:image/jpeg;base64,")
+    # 对Base64字符串进行预处理，移除可能存在的Data URI scheme前缀
     if "," in image_base64_str:
         image_base64_str = image_base64_str.split(",")[1]
 
     img_data = base64.b64decode(image_base64_str)
 
-    # 创建一个临时文件 (会自动删除，但为了稳妥我们手动控制一下)
+    # 创建临时文件保存图片，供API读取
+    # 使用后需手动清理，防止磁盘空间占用
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
     temp_file.write(img_data)
     temp_file.close()
-    image_path = temp_file.name  # 拿到这个文件的绝对路径
+    image_path = temp_file.name
 
     try:
-        # --- 2. 构造 Prompt (你的核心竞争力) ---
-        # 把你截图里的那个表格变成文字规则
-
+        # 定义舌诊的标准化词汇表，确保模型输出可被后续算分逻辑识别
         candidates_substance = "舌淡红, 舌淡边有齿痕, 舌淡, 舌红, 舌淡胖, 舌质紫暗或有瘀斑"
         candidates_coating = "苔薄白, 苔白, 少苔或无苔, 苔白滑, 苔黄腻, 苔薄白或薄黄, 苔白腻或厚腻"
 
@@ -57,32 +52,32 @@ def analyze_image_features(image_base64_str):
         }}
         """
 
-        # --- 3. 调用通义千问-VL API ---
+        # 构造多模态请求消息
         messages = [
             {
                 "role": "user",
                 "content": [
-                    {"image": f"file://{image_path}"},  # 传入本地文件路径
+                    {"image": f"file://{image_path}"},  # 指定本地文件协议
                     {"text": prompt}
                 ]
             }
         ]
 
-        # 使用 qwen-vl-max (效果最好) 或 qwen-vl-plus
+        # 调用通义千问-VL模型进行推理
         response = dashscope.MultiModalConversation.call(
             model='qwen-vl-max',
             messages=messages
         )
 
-        # --- 4. 解析结果 ---
+        # 解析API响应结果
         if response.status_code == HTTPStatus.OK:
             result_text = response.output.choices[0].message.content[0]['text']
             print(f"【1. 图像模块】大模型原始返回: {result_text}")
 
-            # 清洗数据：有时候大模型会返回 ```json ... ```，需要去掉 Markdown 标记
+            # 清洗可能包含的Markdown格式标记
             clean_json = result_text.replace("```json", "").replace("```", "").strip()
 
-            # 转成 Python 字典
+            # 反序列化为字典对象
             features = json.loads(clean_json)
             return features
 
@@ -92,7 +87,7 @@ def analyze_image_features(image_base64_str):
 
     except Exception as e:
         print(f"Error in image processing: {e}")
-        # 发生错误时的兜底（防止程序崩掉）
+        # 异常兜底，返回未知状态以保证流程不中断
         return {
             "visual_summary": "图片识别异常，请重试",
             "tongue_substance": "未知",
@@ -100,33 +95,30 @@ def analyze_image_features(image_base64_str):
         }
 
     finally:
-        # --- 5. 清理战场 ---
-        # 删掉那个临时图片文件，不占硬盘
+        # 清理临时文件
         if os.path.exists(image_path):
             os.remove(image_path)
 
 
 def analyze_face_features(image_base64_str):
     """
-    【新增】面诊专用函数
+    处理面诊图片：流程同上，主要区别在于提示词和候选项
     """
     print("【1. 图像模块】开始处理面部照片...")
 
-    # 1. 解码图片 (和之前一样)
+    # Base64解码
     if "," in image_base64_str:
         image_base64_str = image_base64_str.split(",")[1]
     img_data = base64.b64decode(image_base64_str)
 
+    # 保存临时文件
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
     temp_file.write(img_data)
     temp_file.close()
     image_path = temp_file.name
 
     try:
-        # --- 2. 构造面诊 Prompt ---
-        # 这里的候选项必须是你 Excel 表格里有的词，否则算分算不到
-        # 常见面诊词汇：面色淡白, 面色红, 面色萎黄, 面色晦暗, 面色青紫
-
+        # 定义面诊标准化词汇表
         candidates_face = "面色淡白, 面色红, 面色萎黄, 面色晦暗, 面色青紫, 面色潮红, 颧红"
 
         prompt = f"""
@@ -146,7 +138,7 @@ def analyze_face_features(image_base64_str):
         }}
         """
 
-        # --- 3. 调用 API (和之前一样) ---
+        # 构造请求
         messages = [
             {
                 "role": "user",
@@ -157,6 +149,7 @@ def analyze_face_features(image_base64_str):
             }
         ]
 
+        # 调用模型
         response = dashscope.MultiModalConversation.call(
             model='qwen-vl-max',
             messages=messages
@@ -173,9 +166,9 @@ def analyze_face_features(image_base64_str):
 
     except Exception as e:
         print(f"面诊出错: {e}")
-        return {}  # 出错返回空字典，不影响主流程
+        return {}  # 返回空字典表示无有效特征
 
     finally:
+        # 清理资源
         if os.path.exists(image_path):
             os.remove(image_path)
-

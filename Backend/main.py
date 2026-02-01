@@ -11,45 +11,39 @@ app = FastAPI()
 
 @app.on_event("startup")
 async def startup_event():
+    # 服务启动时预加载Excel数据到内存
     data_loader.load_all_data()
 
 
 @app.post("/api/tcm_process", response_model=ServerResponse)
 async def main_entry(request: ClientRequest):
     try:
-        # 1. 拆解数据
+        # 解包请求数据和上下文
         payload = request.payload
         saved_context = payload.saved_context
 
-        # 临时变量
+        # 用于收集本轮对话中视觉模型提取的特征
         current_image_features = {}
 
-        # ==========================================
-        # 步骤 A: 检查有没有发舌头照片
-        # ==========================================
+        # --- 舌诊图像处理 ---
+        # 检查是否包含舌象图片数据
         if payload.images and payload.images.tongue:
-            # 调用你的图像处理模块
+            # 调用视觉模型提取舌质、舌苔特征
             tongue_features = image_processor.analyze_image_features(payload.images.tongue)
-            # 把结果存入特征字典，Key 可以定为 "tongue_image_result"
+            # 合并特征到当前集合
             current_image_features.update(tongue_features)
 
-        # ==========================================
-        # 步骤 B: 检查有没有发面部照片 (预留)
-        # ==========================================
+        # --- 面诊图像处理 ---
+        # 检查是否包含面部图片数据
         if payload.images and payload.images.face:
-            # 1. 调用刚才写的面诊函数
+            # 调用视觉模型提取面色特征
             face_features = image_processor.analyze_face_features(payload.images.face)
-
-            # 2. 把结果合并到总特征里
-            # 假设 face_features 是 {"face_color": "面色萎黄"}
-            # 它会被自动加入 current_image_features
+            # 合并特征到当前集合，后续会自动进入症状列表参与算分
             current_image_features.update(face_features)
 
-        # ==========================================
-        # 步骤 C: 全权交给医生
-        # ==========================================
-        # 医生不仅要看 user_text，现在还能看到 saved_context 里的 profile (性别年龄)
-
+        # --- 核心诊断流程 ---
+        # 调用医生模块，传入用户文本、历史记录、上下文及视觉特征
+        # 该模块内部包含NLP提取、规则引擎算分及LLM回复生成
         doctor_result = llm_doctor.get_diagnosis_and_reply(
             user_text=payload.user_text,
             history=payload.history,
@@ -57,15 +51,15 @@ async def main_entry(request: ClientRequest):
             current_image_features=current_image_features
         )
 
-        # ==========================================
-        # 步骤 D: 返回
-        # ==========================================
+        # --- 构造响应数据 ---
+        # 检查是否有新的上下文信息需要客户端更新（如提取到了新症状）
         has_new = False
         new_data = {}
         if doctor_result.new_info:
             has_new = True
             new_data = doctor_result.new_info
 
+        # 封装符合Schema定义的返回对象
         response_data = ServerResponseData(
             reply_text=doctor_result.reply,
             has_new_context=has_new,
@@ -76,10 +70,11 @@ async def main_entry(request: ClientRequest):
 
     except Exception as e:
         print(f"Error: {e}")
-        # 打印详细错误栈，方便调试
+        # 输出完整堆栈信息以辅助调试
         import traceback
         traceback.print_exc()
 
+        # 发生异常时返回友好提示，避免前端崩溃
         empty_data = ServerResponseData(reply_text="服务器内部错误", has_new_context=False)
         return ServerResponse(status="error", message=str(e), data=empty_data)
 

@@ -7,148 +7,154 @@ from openai import OpenAI
 import data_loader
 
 client = OpenAI(
-    api_key="sk-aad791214f9441a9b5af19b6c63f1ed3",
+    api_key="DEEPSEEK_API_KEY",
     base_url="https://api.deepseek.com"
 )
 
+
 class DoctorResult:
+    """
+    DTO用于传递诊断结果和上下文更新
+    """
+
     def __init__(self, reply, new_info=None):
         self.reply = reply
         self.new_info = new_info
 
-# ==========================================
-# PART 1: 基础工具 (超详细 Debug 版)
-# ==========================================
 
 # ==========================================
-# PART 1: 基础工具 (升级版数据清洗)
+# 辅助工具函数模块
 # ==========================================
 
 def remove_markdown_symbol(text):
+    """
+    清洗Markdown格式，适配移动端纯文本展示
+    """
     if not text: return ""
-    # 去除 **加粗**
+
+    # 移除加粗、斜体
     text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
-    # 去除 *斜体*
     text = re.sub(r'\*(.*?)\*', r'\1', text)
-    # 去除标题和链接
+
+    # 移除标题标记和链接格式
     text = text.replace("##", "").replace("#", "")
     text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
     return text
 
+
 def clean_excel_cell(cell_text):
+    """
+    规范化Excel单元格内容：去除标记符号，提取关键词列表
+    """
     text = str(cell_text)
-    
-    # 1. 去除 Markdown 加粗
+
+    # 清理Markdown加粗标记
     text = text.replace("**", "")
-    
-    # 2. 【核心修复】去除中英文方括号及内容 [12] [34,35]
-    #    这能解决你遇到的 ['[34', '35]。'] 问题
-    text = re.sub(r'\[.*?\]', '', text) 
-    
-    # 3. 去除中英文圆括号及内容 (解释) （说明）
+
+    # 移除各类括号及其内部内容（通常是解释性文字，非核心症状）
+    text = re.sub(r'\[.*?\]', '', text)
     text = re.sub(r'\(.*?\)', '', text)
     text = re.sub(r'（.*?）', '', text)
-    
-    # 4. 【核心修复】去除句号和其他标点干扰
+
+    # 移除标点干扰
     text = text.replace("。", "").replace(".", "")
-    
-    # 5. 按各种分隔符切分 (分号、逗号、顿号、空格)
+
+    # 根据常见分隔符拆分关键词
     keywords = re.split(r'[;；,，、\s]+', text)
-    
-    # 6. 再次清洗并过滤空值
+
     return [k.strip() for k in keywords if k.strip()]
+
 
 def calculate_score_deterministic(table_key, user_symptoms_synonyms):
     """
-    带详细日志的算分函数
+    核心算分引擎：遍历规则表，计算用户症状与证型的匹配度
     """
     df = data_loader.get_table(table_key)
-    
-    # === [Debug] 打印读取状态 ===
+
+    # 调试日志：确认表格加载状态
     print(f"\n   🔎 [Debug-Deep] 正在扫描表格: <{table_key}>")
     if df.empty:
         print(f"   ❌ [Error] 表格为空或未加载! 请检查 data_loader.py")
         return {}, []
     else:
         print(f"   📄 [Info] 表格包含 {len(df)} 行数据。")
-        # 打印第一行数据，检查列名是否正确
         first_row = df.iloc[0].to_dict()
         print(f"   📄 [Info] 表头示例: {list(first_row.keys())}")
-    # =============================
 
     results = []
-    
-    # 遍历每一行（每一个证型）
+
+    # 逐行扫描证型规则
     for index, row in df.iterrows():
         score = 0
         matched_core = []
-        unknown_core = [] 
-        
-        # 获取列内容（带容错处理）
+        unknown_core = []
+
+        # 提取当前行的核心信息
         pattern_name = row.get('辨证类型', '未知证型')
         raw_core = str(row.get('核心临床表现（含判断关键）', ''))
         raw_side = str(row.get('可能/伴见表现', ''))
-        
+
         core_list = clean_excel_cell(raw_core)
         side_list = clean_excel_cell(raw_side)
 
-        # --- 1. 核心症状逻辑 ---
+        # 核心症状匹配逻辑（高权重）
         for c_sym in core_list:
             is_found = False
             matched_word = ""
-            
+
+            # 双向模糊匹配
             for u_word in user_symptoms_synonyms:
                 if not isinstance(u_word, str): continue
-                # 双向匹配
                 if u_word in c_sym or c_sym in u_word:
                     is_found = True
                     matched_word = u_word
                     break
-            
+
             if is_found:
                 if c_sym not in matched_core:
                     score += 10
                     matched_core.append(c_sym)
-                    # === [Debug] 打印命中详情 ===
                     print(f"      ✅ [Hit] 用户词'{matched_word}' 命中 <{pattern_name}> 的核心词 '{c_sym}' (+10分)")
             else:
                 unknown_core.append(c_sym)
 
-        # --- 2. 伴见症状逻辑 ---
+        # 伴见症状匹配逻辑（低权重）
         for u_word in user_symptoms_synonyms:
             if not isinstance(u_word, str): continue
+            # 如果该词已匹配核心症状，则跳过，避免重复计分
             if any(u_word in c or c in u_word for c in core_list): continue
-            
+
             for s_sym in side_list:
                 if u_word in s_sym or s_sym in u_word:
                     score += 5
-                    # === [Debug] 打印命中详情 ===
                     print(f"      ☑️ [Side] 用户词'{u_word}' 命中 <{pattern_name}> 的伴见词 '{s_sym}' (+5分)")
                     break
 
-        if score > 0: 
+        # 记录有效匹配结果
+        if score > 0:
             results.append({
                 "pattern": pattern_name,
                 "score": score,
                 "evidence_str": f"已确认核心症状：{matched_core}",
-                "unknown_core": unknown_core, 
-                "is_fully_explored": len(unknown_core) == 0 
+                "unknown_core": unknown_core,
+                "is_fully_explored": len(unknown_core) == 0
             })
 
+    # 按分数降序排列
     results.sort(key=lambda x: x['score'], reverse=True)
     score_dict = {r['pattern']: r['score'] for r in results}
     return score_dict, results
 
-# ==========================================
-# PART 2: 核心诊断逻辑 (LLM 泛化同义词)
-# ==========================================
 
 # ==========================================
-# PART 2: 核心诊断逻辑 (修复版：匹配主逻辑的双列表要求)
+# 核心诊断业务模块
 # ==========================================
 
 def normalize_user_symptoms(user_text, history):
-    # 1. 获取上一句 AI 的话，解决“对对对”的问题
+    """
+    NLP处理：调用大模型提取用户文本中的症状，并区分为肯定/否定列表
+    """
+    # 提取上一轮AI回复，用于辅助理解上下文（如用户回答“是的”）
     last_ai_msg = "无"
     if history and len(history) > 0:
         for msg in reversed(history):
@@ -157,18 +163,18 @@ def normalize_user_symptoms(user_text, history):
                 break
 
     if not user_text: return {"pos": [], "neg": []}
-    
+
     prompt = f"""
     你是一个中医术语转换器。
     【上下文】：医生问="{last_ai_msg}"，患者答="{user_text}"
-    
+
     【任务】：
     1. 分析患者【确认有】的症状，放入 "pos" 列表。
        ⚠️ 必须包含同义词！(为了匹配表格)
        例如：确认有"怕冷"，pos=["怕冷", "恶寒", "畏寒", "肢冷"]。
-       
+
     2. 分析患者【确认无/排除】的症状，放入 "neg" 列表。
-    
+
     【输出】：JSON 对象 {{ "pos": [], "neg": [] }}
     """
     try:
@@ -177,19 +183,22 @@ def normalize_user_symptoms(user_text, history):
         )
         content = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
         result = json.loads(content)
-        # 打印一下看看提取到了什么
         print(f"🧠 [Debug-LLM] 提取结果: {result}")
         return result
     except Exception as e:
         print(f"🧠 [Debug-LLM] 提取失败: {e}")
         return {"pos": [], "neg": []}
 
+
 def run_diagnosis_pipeline(symptoms_list):
+    """
+    诊断流程控制器：八纲辨证 -> 选表 -> 特定辨证 -> 脏腑辨证
+    """
     print(f"\n🚀 [Debug-Pipeline] 开始全表扫描，当前症状池({len(symptoms_list)}个): {symptoms_list}")
-    
-    # 1. 跑八纲
+
+    # 步骤1：八纲定性（表里、寒热、虚实）
     scores_8_dict, _ = calculate_score_deterministic('八纲', symptoms_list)
-    
+
     s_biao = scores_8_dict.get('表证', 0)
     s_li = scores_8_dict.get('里证', 0)
     s_han = scores_8_dict.get('寒证', 0)
@@ -199,22 +208,22 @@ def run_diagnosis_pipeline(symptoms_list):
 
     print(f"   ⚖️ [Debug-八纲] 表:{s_biao} vs 里:{s_li} | 寒:{s_han} vs 热:{s_re} | 虚:{s_xu} vs 实:{s_shi}")
 
-    # 2. 选表逻辑
+    # 步骤2：根据八纲结果选择合适的辨证体系
     target_table_key = ""
     if s_biao >= s_li and s_biao > 0:
         target_table_key = "六经" if s_han >= s_re else "卫气营血"
     else:
-        # 如果里证大，或者都没分(默认里)
+        # 默认走向气血津液或病因
         target_table_key = "气血津液" if s_xu >= s_shi else "病因"
 
     print(f"   👉 [Debug-选表] 根据八纲结果，决定进入: <{target_table_key}辨证表>")
 
-    # 3. 跑具体表
+    # 步骤3：执行特定辨证
     specific_results = []
     if target_table_key:
         _, specific_results = calculate_score_deterministic(target_table_key, symptoms_list)
 
-    # 4. 跑脏腑表
+    # 步骤4：并发执行脏腑辨证作为补充
     _, zangfu_results = calculate_score_deterministic('脏腑', symptoms_list)
 
     return {
@@ -222,11 +231,15 @@ def run_diagnosis_pipeline(symptoms_list):
         "organ_list": zangfu_results
     }
 
+
 # ==========================================
-# PART 2.5: 方剂推荐逻辑
+# 方剂推荐模块
 # ==========================================
 
 def recommend_prescription_pipeline(user_symptoms):
+    """
+    根据确诊症状匹配最合适的方剂
+    """
     print(f"\n💊 [Debug-选方] 开始执行方剂推荐...")
     KNOWN_CHAPTER_FILES = [
         "方剂学/第一章解表剂.xlsx", "方剂学/第二章泻下剂.xlsx", "方剂学/第三章和解剂.xlsx",
@@ -244,6 +257,7 @@ def recommend_prescription_pipeline(user_symptoms):
         print(f"❌ [Debug-选方] 索引表读取失败: {e}")
         return None
 
+    # 第一阶段：定位章节
     best_chapter_target = ""
     max_chapter_score = -1
 
@@ -261,23 +275,25 @@ def recommend_prescription_pipeline(user_symptoms):
 
     if not best_chapter_target:
         print(f"❌ [Debug-选方] 未匹配到任何章节。")
-        return None 
+        return None
 
     print(f"✅ [Debug-选方] 锁定章节: 【{best_chapter_target}】")
 
+    # 第二阶段：在特定章节文件中查找方剂
     target_filename = ""
     clean_target = best_chapter_target.replace(" ", "")
     for fname in KNOWN_CHAPTER_FILES:
         if clean_target in fname:
             target_filename = fname
             break
-            
+
     if not target_filename or not os.path.exists(target_filename): return None
 
     try:
         df_chapter = pd.read_excel(target_filename).fillna("")
         df_chapter.columns = df_chapter.columns.str.strip()
-    except: return None
+    except:
+        return None
 
     candidates = []
     for idx, row in df_chapter.iterrows():
@@ -291,27 +307,29 @@ def recommend_prescription_pipeline(user_symptoms):
                 if u_sym in c_sym or c_sym in u_sym:
                     score += 10
                     matched.append(u_sym)
-                    break 
+                    break
         if score > 0:
             candidates.append({"row_data": row, "score": score, "matched": matched})
 
     if not candidates: return None
 
+    # 返回得分最高的方剂
     candidates.sort(key=lambda x: x['score'], reverse=True)
     winner = candidates[0]
     row_winner = winner['row_data']
     print(f"🏆 [Debug-选方] 胜出: {row_winner.get('方剂名称')}")
-    
+
     rx_name = str(row_winner.get('方剂名称', ''))
     rx_type = str(row_winner.get('正附分类', '正方')).strip()
     rx_ingredients = str(row_winner.get('具体成分', '暂无'))
-    
+
     final_output = {
         "name": rx_name, "ingredients": rx_ingredients,
         "reason": f"症状命中：{winner['matched']}",
         "is_attached": False, "main_rx": None
     }
 
+    # 处理附方逻辑：如果选中的是附方，需回溯主方信息
     if "附方" in rx_type:
         main_name = str(row_winner.get('对应主方', '')).strip()
         final_output["is_attached"] = True
@@ -324,32 +342,33 @@ def recommend_prescription_pipeline(user_symptoms):
 
     return final_output
 
+
 # ==========================================
-# PART 3: 主交互入口 (压平逻辑 + 分支打印)
+# 主控制逻辑接口
 # ==========================================
 
 def get_diagnosis_and_reply(user_text, history, saved_context, current_image_features=None):
-    # --- 1. 恢复记忆 ---
+    # 恢复上下文中的症状状态
     current_symptoms = saved_context.get("symptoms", [])
     if not isinstance(current_symptoms, list): current_symptoms = []
 
     has_update = False
 
-    # --- 2. 图像融合 ---
+    # 融合多模态特征：将视觉识别结果并入症状列表
     if current_image_features:
-        img_symptoms = [v for k,v in current_image_features.items() if isinstance(v, str) and len(v)<10]
+        img_symptoms = [v for k, v in current_image_features.items() if isinstance(v, str) and len(v) < 10]
         if img_symptoms:
             for s in img_symptoms:
                 if s not in current_symptoms: current_symptoms.append(s)
             has_update = True
 
-    # --- 3. 文本更新 ---
+    # 融合文本特征：NLP提取并更新症状集合
     if user_text:
-        extracted = normalize_user_symptoms(user_text,history)
+        extracted = normalize_user_symptoms(user_text, history)
         to_add_raw = extracted.get("pos", [])
         to_remove_raw = extracted.get("neg", [])
 
-        # 压平逻辑
+        # 辅助函数：展平并清洗列表
         def flatten_and_clean(raw_list):
             flat = []
             for item in raw_list:
@@ -364,25 +383,27 @@ def get_diagnosis_and_reply(user_text, history, saved_context, current_image_fea
         new_neg = flatten_and_clean(to_remove_raw)
 
         if new_pos or new_neg:
+            # 执行否定排除逻辑
             for n in new_neg:
                 current_symptoms = [s for s in current_symptoms if n not in s and s not in n]
+            # 执行肯定添加逻辑
             for p in new_pos:
                 if p not in current_symptoms: current_symptoms.append(p)
             has_update = True
-    
-    # --- 4. 运行诊断 ---
+
+    # 运行诊断Pipeline，获取所有候选证型
     diag_result = run_diagnosis_pipeline(current_symptoms)
     candidates = diag_result['specific_list'] + diag_result['organ_list']
     candidates.sort(key=lambda x: x['score'], reverse=True)
-    
+
     top_candidate = candidates[0] if candidates else None
 
-    # --- 5. 决策逻辑 (穷尽 1 -> 开方) ---
-    final_decision = None 
+    # 决策逻辑：判断当前是应该追问、确诊还是处理未知
+    final_decision = None
     target_to_ask = None
-    CONFIRM_THRESHOLD = 25 
+    CONFIRM_THRESHOLD = 25
 
-    # === [Debug] 打印当前决策状态 ===
+    # 调试日志：输出当前最佳候选项状态
     print(f"\n🎯 [Debug-决策中心]")
     if top_candidate:
         print(f"   当前第一名: 【{top_candidate['pattern']}】")
@@ -391,25 +412,24 @@ def get_diagnosis_and_reply(user_text, history, saved_context, current_image_fea
         print(f"   剩余核心症状: {top_candidate['unknown_core']}")
     else:
         print(f"   ⚠️ 当前无匹配候选项 (所有表评分均为0)")
-    # ==============================
 
     if not top_candidate:
         print(f"👉 进入分支: [C. 无方向]")
-        pass 
+        pass
     else:
         if top_candidate['score'] >= CONFIRM_THRESHOLD:
             print(f"👉 进入分支: [A. 确诊 (分数达标)]")
             final_decision = top_candidate
-        
+
         elif not top_candidate['is_fully_explored']:
             print(f"👉 进入分支: [B. 追问 (继续问第一名)]")
             target_to_ask = top_candidate
-            
+
         else:
             print(f"👉 进入分支: [A. 确诊 (强制确诊)]")
             final_decision = top_candidate
 
-    # --- 6. 构建 Prompt ---
+    # 构造LLM Prompt
     user_profile = saved_context.get("profile", {})
     p_sex = user_profile.get("sex", "")
     p_age = str(user_profile.get("age", ""))
@@ -426,10 +446,11 @@ def get_diagnosis_and_reply(user_text, history, saved_context, current_image_fea
     3. 仅输出纯文本，就像微信聊天一样。
     """
 
+    # 根据决策状态生成不同的System Prompt
     if final_decision:
         diagnosis_status = "CONFIRMED"
         rx_result = recommend_prescription_pipeline(current_symptoms)
-        
+
         rx_text = "暂无匹配方剂"
         if rx_result:
             if rx_result['is_attached']:
@@ -447,7 +468,7 @@ def get_diagnosis_and_reply(user_text, history, saved_context, current_image_fea
         【结论】：确诊为【{final_decision['pattern']}】{forced_msg}。
         【依据】：{final_decision['evidence_str']}。
         【选方】：{rx_text}
-        
+
         任务：
         1. 告知结果。
         2. 解释原因。
@@ -460,7 +481,7 @@ def get_diagnosis_and_reply(user_text, history, saved_context, current_image_fea
         diagnosis_status = "ASKING"
         name = target_to_ask['pattern']
         unknowns = target_to_ask['unknown_core']
-        ask_focus = unknowns[:2] 
+        ask_focus = unknowns[:2]
         ask_str = "、".join(ask_focus)
 
         system_prompt = f"""
@@ -484,12 +505,12 @@ def get_diagnosis_and_reply(user_text, history, saved_context, current_image_fea
         请基于八纲（寒热/表里/虚实），选择一到两个维度询问。
         """
 
-    # --- 7. 调用 LLM ---
+    # 调用大模型生成回复
     messages_payload = [{"role": "system", "content": system_prompt}]
     if history:
         for h in history:
             messages_payload.append({"role": h.get('role', 'user'), "content": str(h.get('content', ''))})
-    
+
     final_input = f"【已知症状】：{current_symptoms}\n【用户输入】：{user_text}"
     messages_payload.append({"role": "user", "content": final_input})
 
@@ -499,15 +520,17 @@ def get_diagnosis_and_reply(user_text, history, saved_context, current_image_fea
         )
         ai_reply = reply_resp.choices[0].message.content
 
+        # 最终清洗Markdown符号，确保客户端显示正常
         ai_reply = remove_markdown_symbol(ai_reply)
     except Exception as e:
         ai_reply = f"系统繁忙: {e}"
 
-    # --- 8. 保存记忆 ---
+    # 构造返回对象，更新上下文状态
     new_context = {
-        "symptoms": current_symptoms, 
-        "last_diag_name": final_decision['pattern'] if final_decision else (target_to_ask['pattern'] if target_to_ask else None),
+        "symptoms": current_symptoms,
+        "last_diag_name": final_decision['pattern'] if final_decision else (
+            target_to_ask['pattern'] if target_to_ask else None),
         "status": diagnosis_status
     }
-    
+
     return DoctorResult(reply=ai_reply, new_info=new_context if has_update else None)

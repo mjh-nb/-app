@@ -3,45 +3,49 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 
 
-# --- 新增：专门用来接图片的结构 ---
+# 多模态图像输入结构，接收Base64编码
 class Images(BaseModel):
-    # 对应 json 里的 "face" 和 "tongue"
-    # 前端可能不传，或者传 null，所以设为 Optional
+    # 面部和舌象数据，均为可选字段
     face: Optional[str] = None
     tongue: Optional[str] = None
 
 
-# --- 修改：Payload 结构 ---
+# 请求载体，封装单次交互的所有必要信息
 class Payload(BaseModel):
-    # 1. 图片变成了嵌套结构
+    # 多模态图像数据
     images: Optional[Images] = None
 
-    # 2. 用户主诉
+    # 用户当前的主诉文本
     user_text: Optional[str] = None
 
-    # 3. 关键信息库
-    # 前端截图里只有 profile，但我们之前的 symptoms (症状) 和 tongue (舌象数据) 也要存在这里
-    # 所以定义为 Dict[str, Any] 是最安全的，啥都能存
+    # 客户端维护的持久化上下文（包含症状集合、用户Profile等）
+    # 使用Dict[str, Any]以保持结构扩展性
     saved_context: Dict[str, Any] = {}
 
-    # 4. 历史记录
+    # 多轮对话历史，用于LLM理解上下文
     history: List[Dict[str, str]] = []
 
 
-# --- 修改：外层请求 ---
+# 客户端请求顶层结构
 class ClientRequest(BaseModel):
     user_id: str = "default_user"
-    request_type: str = "multi"  # 默认改为 multi
+    request_type: str = "multi"  # 默认为多模态混合交互模式
     payload: Payload
 
 
-# --- 响应结构 (保持不变，或者根据需要微调) ---
+# 业务层响应数据DTO
 class ServerResponseData(BaseModel):
+    # LLM生成的回复文本
     reply_text: str
+
+    # 标记是否有新的上下文信息（如新识别的症状）需要客户端更新
     has_new_context: bool
+
+    # 需要客户端保存的上下文更新数据
     new_context_to_save: Dict[str, Any] = {}
 
 
+# 标准API响应包装类
 class ServerResponse(BaseModel):
     status: str = "success"
     message: str = ""
