@@ -181,9 +181,7 @@ public class CropImageView extends AppCompatImageView {
         }
     }
 
-    /**
-     * 获取裁剪后的图片
-     */
+    //获取裁剪后的图片
     public Bitmap getCroppedBitmap(View guideView) {
         if (currentBitmap == null) return null;
 
@@ -224,9 +222,7 @@ public class CropImageView extends AppCompatImageView {
         }
     }
 
-    /**
-     * 重置到初始状态
-     */
+    //重置到初始状态
     public void resetImage() {
         centerAndFitImage();
     }

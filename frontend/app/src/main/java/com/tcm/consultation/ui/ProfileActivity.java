@@ -26,7 +26,7 @@ public class ProfileActivity extends AppCompatActivity implements ProfileAdapter
 
     private RecyclerView recyclerView;
     private ProfileAdapter adapter;
-    private LinearLayout layoutEmpty;  // 修复：改为 LinearLayout
+    private LinearLayout layoutEmpty;
     private ProfileStorage storage;
 
     @Override
@@ -79,10 +79,10 @@ public class ProfileActivity extends AppCompatActivity implements ProfileAdapter
         adapter.setProfiles(profiles);
 
         if (profiles.isEmpty()) {
-            layoutEmpty.setVisibility(View.VISIBLE);  // 修复：使用 layoutEmpty
+            layoutEmpty.setVisibility(View.VISIBLE);
             recyclerView.setVisibility(View.GONE);
         } else {
-            layoutEmpty.setVisibility(View.GONE);  // 修复：使用 layoutEmpty
+            layoutEmpty.setVisibility(View.GONE);
             recyclerView.setVisibility(View.VISIBLE);
         }
     }

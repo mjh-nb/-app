@@ -190,9 +190,7 @@ public class CustomCameraActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * 切换前后摄像头
-     */
+    //切换前后摄像头
     private void switchCamera() {
         isFrontCamera = !isFrontCamera;
         bindCamera();
@@ -236,9 +234,7 @@ public class CustomCameraActivity extends AppCompatActivity {
                 });
     }
 
-    /**
-     * 水平翻转图片（解决前置摄像头镜像问题）
-     */
+    //水平翻转图片（解决前置摄像头镜像问题）
     private void flipImageHorizontally(File imageFile) {
         try {
             Bitmap original = BitmapFactory.decodeFile(imageFile.getAbsolutePath());

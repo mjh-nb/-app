@@ -97,9 +97,7 @@ public class TongueGuideOverlay extends View {
         canvas.drawOval(ovalRect, borderPaint);
     }
 
-    /**
-     * 获取引导框区域
-     */
+    //获取引导框区域
     public RectF getGuideRect() {
         return ovalRect;
     }

@@ -86,9 +86,7 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         return messages.size();
     }
 
-    /**
-     * 设置消息列表
-     */
+    //设置消息列表
     public void setMessages(List<ChatMessage> newMessages) {
         messages.clear();
         if (newMessages != null) {
@@ -97,17 +95,13 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         notifyDataSetChanged();
     }
 
-    /**
-     * 添加消息
-     */
+    //添加消息
     public void addMessage(ChatMessage message) {
         messages.add(message);
         notifyItemInserted(messages.size() - 1);
     }
 
-    /**
-     * 更新最后一条消息
-     */
+    //更新最后一条消息
     public void updateLastMessage(ChatMessage message) {
         if (!messages.isEmpty()) {
             int lastIndex = messages.size() - 1;
@@ -116,9 +110,7 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         }
     }
 
-    /**
-     * 移除最后一条消息
-     */
+    //移除最后一条消息
     public void removeLastMessage() {
         if (!messages.isEmpty()) {
             int lastIndex = messages.size() - 1;
@@ -127,16 +119,12 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         }
     }
 
-    /**
-     * 获取消息数量
-     */
+    //获取消息数量
     public int getMessageCount() {
         return messages.size();
     }
 
-    /**
-     * 用户消息 ViewHolder
-     */
+    //用户消息 ViewHolder
     static class UserMessageViewHolder extends RecyclerView.ViewHolder {
         private final TextView tvContent;
 

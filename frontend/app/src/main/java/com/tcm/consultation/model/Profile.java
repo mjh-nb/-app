@@ -135,9 +135,7 @@ public class Profile {
         this.updatedAt = updatedAt;
     }
 
-    /**
-     * 更新 savedContext 中的 profile 信息
-     */
+    //更新 savedContext 中的 profile 信息
     private void updateProfileInContext() {
         Map<String, Object> profileInfo = new HashMap<>();
         profileInfo.put("name", name);
@@ -147,50 +145,38 @@ public class Profile {
         updatedAt = System.currentTimeMillis();
     }
 
-    /**
-     * 添加用户消息到历史
-     */
+   //添加用户消息到历史
     public void addUserMessage(String content) {
         ChatMessage message = ChatMessage.createUserMessage(content);
         history.add(message);
         updatedAt = System.currentTimeMillis();
     }
 
-    /**
-     * 添加助手消息到历史
-     */
+    //添加助手消息到历史
     public void addAssistantMessage(String content) {
         ChatMessage message = ChatMessage.createAssistantMessage(content);
         history.add(message);
         updatedAt = System.currentTimeMillis();
     }
 
-    /**
-     * 获取当前历史轮数
-     */
+   //获取当前历史轮数
     public int getHistoryRounds() {
         return history.size();
     }
 
-    /**
-     * 清空历史记录
-     */
+    //清空历史记录
     public void clearHistory() {
         history.clear();
         updatedAt = System.currentTimeMillis();
     }
 
-    /**
-     * 清空 saved_context（保留 profile 基本信息）
-     */
+   //清空 saved_context（保留 profile 基本信息）
     public void clearSavedContext() {
         savedContext.clear();
         updateProfileInContext();
     }
 
-    /**
-     * 合并新的上下文到 saved_context
-     */
+  //合并新的上下文到 saved_context
     @SuppressWarnings("unchecked")
     public void mergeSavedContext(Map<String, Object> newContext) {
         if (newContext != null && !newContext.isEmpty()) {
@@ -205,9 +191,7 @@ public class Profile {
         }
     }
 
-    /**
-     * 获取显示名称（如果名字为空则显示默认值）
-     */
+    //获取显示名称（如果名字为空则显示默认值）
     public String getDisplayName() {
         if (name == null || name.trim().isEmpty()) {
             return "未命名";
@@ -215,9 +199,7 @@ public class Profile {
         return name;
     }
 
-    /**
-     * 获取性别和年龄描述
-     */
+    //获取性别和年龄描述
     public String getGenderAgeDesc() {
         return sex + " · " + age + "岁";
     }

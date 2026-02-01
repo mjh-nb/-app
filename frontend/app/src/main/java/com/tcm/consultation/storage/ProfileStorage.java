@@ -32,9 +32,7 @@ public class ProfileStorage {
         gson = new Gson();
     }
 
-    /**
-     * 获取单例实例
-     */
+    //获取单例实例
     public static synchronized ProfileStorage getInstance(Context context) {
         if (instance == null) {
             instance = new ProfileStorage(context);
@@ -42,9 +40,7 @@ public class ProfileStorage {
         return instance;
     }
 
-    /**
-     * 获取所有问诊人档案列表
-     */
+    //获取所有问诊人档案列表
     public List<Profile> getAllProfiles() {
         if (profileCache == null) {
             String json = prefs.getString(Constants.KEY_PROFILES, null);
@@ -59,18 +55,14 @@ public class ProfileStorage {
         return new ArrayList<>(profileCache);
     }
 
-    /**
-     * 保存所有问诊人档案列表
-     */
+    //保存所有问诊人档案列表
     private void saveAllProfiles(List<Profile> profiles) {
         profileCache = new ArrayList<>(profiles);
         String json = gson.toJson(profiles);
         prefs.edit().putString(Constants.KEY_PROFILES, json).apply();
     }
 
-    /**
-     * 根据 ID 获取问诊人档案
-     */
+    //根据 ID 获取问诊人档案
     public Profile getProfileById(String userId) {
         List<Profile> profiles = getAllProfiles();
         for (Profile profile : profiles) {
@@ -81,18 +73,14 @@ public class ProfileStorage {
         return null;
     }
 
-    /**
-     * 添加新的问诊人档案
-     */
+    //添加新的问诊人档案
     public void addProfile(Profile profile) {
         List<Profile> profiles = getAllProfiles();
         profiles.add(profile);
         saveAllProfiles(profiles);
     }
 
-    /**
-     * 更新问诊人档案
-     */
+    //更新问诊人档案
     public void updateProfile(Profile profile) {
         List<Profile> profiles = getAllProfiles();
         for (int i = 0; i < profiles.size(); i++) {
@@ -105,9 +93,7 @@ public class ProfileStorage {
         }
     }
 
-    /**
-     * 删除问诊人档案
-     */
+    //删除问诊人档案
     public void deleteProfile(String userId) {
         List<Profile> profiles = getAllProfiles();
         profiles.removeIf(p -> p.getUserId().equals(userId));
@@ -119,9 +105,7 @@ public class ProfileStorage {
         }
     }
 
-    /**
-     * 获取当前选中的问诊人 ID
-     */
+    //获取当前选中的问诊人 ID
     public String getCurrentProfileId() {
         if (currentProfileIdCache == null) {
             currentProfileIdCache = prefs.getString(Constants.KEY_CURRENT_PROFILE_ID, null);
@@ -129,9 +113,7 @@ public class ProfileStorage {
         return currentProfileIdCache;
     }
 
-    /**
-     * 设置当前选中的问诊人 ID
-     */
+    //设置当前选中的问诊人 ID
     public void setCurrentProfileId(String userId) {
         currentProfileIdCache = userId;
         if (userId == null) {
@@ -141,9 +123,7 @@ public class ProfileStorage {
         }
     }
 
-    /**
-     * 获取当前选中的问诊人档案
-     */
+    //获取当前选中的问诊人档案
     public Profile getCurrentProfile() {
         String currentId = getCurrentProfileId();
         if (currentId != null) {
@@ -152,16 +132,12 @@ public class ProfileStorage {
         return null;
     }
 
-    /**
-     * 判断是否存在问诊人档案
-     */
+    //判断是否存在问诊人档案
     public boolean hasProfiles() {
         return !getAllProfiles().isEmpty();
     }
 
-    /**
-     * 清除所有数据（用于测试或重置）
-     */
+    //清除所有数据（用于测试或重置）
     public void clearAll() {
         profileCache = null;
         currentProfileIdCache = null;
@@ -171,9 +147,7 @@ public class ProfileStorage {
                 .apply();
     }
 
-    /**
-     * 刷新缓存
-     */
+    //刷新缓存
     public void refreshCache() {
         profileCache = null;
         currentProfileIdCache = null;

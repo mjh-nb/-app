@@ -25,7 +25,6 @@ import okhttp3.ResponseBody;
 /**
  * TCMApiClient - 网络请求客户端
  * 职责：封装 OkHttp，处理与后端的 HTTP 通信
- * 
  * 修改服务器地址：修改 Constants.java 中的 API_URL
  */
 public class TCMApiClient {
@@ -50,9 +49,7 @@ public class TCMApiClient {
         mainHandler = new Handler(Looper.getMainLooper());
     }
 
-    /**
-     * 获取单例实例
-     */
+    //获取单例实例
     public static synchronized TCMApiClient getInstance() {
         if (instance == null) {
             instance = new TCMApiClient();
@@ -62,7 +59,6 @@ public class TCMApiClient {
 
     /**
      * 发送问诊请求
-     * 
      * @param tcmRequest 请求数据
      * @param callback   回调接口
      */
@@ -145,9 +141,7 @@ public class TCMApiClient {
         });
     }
 
-    /**
-     * 解析错误信息
-     */
+    //解析错误信息
     private String parseErrorMessage(IOException e) {
         String message = e.getMessage();
         if (message == null) {
@@ -167,25 +161,17 @@ public class TCMApiClient {
         return "网络错误：" + message;
     }
 
-    /**
-     * 取消所有请求
-     */
+    //取消所有请求
     public void cancelAll() {
         client.dispatcher().cancelAll();
     }
 
-    /**
-     * API 回调接口
-     */
+    //API 回调接口
     public interface ApiCallback {
-        /**
-         * 请求成功
-         */
+        //请求成功
         void onSuccess(TCMResponse response);
 
-        /**
-         * 请求失败
-         */
+        //请求失败
         void onError(String errorMessage);
     }
 }

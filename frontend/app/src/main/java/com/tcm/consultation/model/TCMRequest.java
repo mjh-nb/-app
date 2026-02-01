@@ -8,7 +8,6 @@ import java.util.Map;
 /**
  * TCMRequest - 请求数据模型
  * 职责：构建发送给后端的 JSON 请求体
- * 
  * 修改 JSON 字段：修改 @SerializedName 注解的值
  */
 public class TCMRequest {
@@ -52,9 +51,7 @@ public class TCMRequest {
         this.payload = payload;
     }
 
-    /**
-     * Payload - 请求载荷内部类
-     */
+    //Payload - 请求载荷内部类
     public static class Payload {
 
         @SerializedName("images")
@@ -107,9 +104,7 @@ public class TCMRequest {
         }
     }
 
-    /**
-     * Images - 图片数据内部类
-     */
+    //Images - 图片数据内部类
     public static class Images {
 
         @SerializedName("face")
@@ -135,18 +130,14 @@ public class TCMRequest {
             this.tongue = tongue;
         }
 
-        /**
-         * 判断是否有图片数据
-         */
+        //判断是否有图片数据
         public boolean hasImage() {
             return (face != null && !face.isEmpty()) 
                 || (tongue != null && !tongue.isEmpty());
         }
     }
 
-    /**
-     * 构建器类
-     */
+    //构建器类
     public static class Builder {
         private final TCMRequest request;
 

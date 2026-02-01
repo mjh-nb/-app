@@ -108,9 +108,7 @@ public class ChatActivity extends AppCompatActivity {
         loadCurrentProfile();
     }
 
-    /**
-     * 点击空白处收起键盘
-     */
+    //点击空白处收起键盘
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
         if (ev.getAction() == MotionEvent.ACTION_DOWN) {
@@ -132,9 +130,7 @@ public class ChatActivity extends AppCompatActivity {
         return super.dispatchTouchEvent(ev);
     }
 
-    /**
-     * 隐藏软键盘
-     */
+    //隐藏软键盘
     private void hideKeyboard() {
         View view = getCurrentFocus();
         if (view != null) {
@@ -203,9 +199,7 @@ public class ChatActivity extends AppCompatActivity {
                 });
     }
 
-    /**
-     * 打开裁剪页面
-     */
+    //打开裁剪页面
     private void openCropActivity(Uri imageUri, int imageType) {
         Intent intent = new Intent(this, ImageCropActivity.class);
         intent.putExtra(ImageCropActivity.EXTRA_IMAGE_URI, imageUri);
@@ -473,9 +467,7 @@ public class ChatActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * 拍照 - 使用自定义相机（带引导框）
-     */
+    //拍照 - 使用自定义相机（带引导框）
     private void takePhoto(int imageType) {
         Intent intent = new Intent(this, CustomCameraActivity.class);
         intent.putExtra(CustomCameraActivity.EXTRA_IMAGE_TYPE, imageType);

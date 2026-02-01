@@ -4,9 +4,7 @@ import com.google.gson.annotations.SerializedName;
 
 /**
  * ChatMessage - 聊天消息数据模型
- * 职责：表示单条聊天消息，用于 UI 展示和 history 构建
- * 
- * 修改 JSON 字段：修改 @SerializedName 注解的值
+ * 职责：表示单条聊天消息，用于 UI 展示和 history 构建，修改 JSON 字段：修改 @SerializedName 注解的值
  */
 public class ChatMessage {
 
@@ -18,13 +16,13 @@ public class ChatMessage {
     @SerializedName("content")
     private String content;
 
-    // 消息 ID（仅本地使用，不传给后端）
+    // 消息 ID
     private transient String messageId;
 
-    // 是否为加载中状态（仅本地使用）
+    // 是否为加载中状态
     private transient boolean isLoading;
 
-    // 时间戳（仅本地使用）
+    // 时间戳
     private transient long timestamp;
 
     public ChatMessage() {
@@ -77,39 +75,31 @@ public class ChatMessage {
         this.timestamp = timestamp;
     }
 
-    /**
-     * 判断是否为用户消息
-     */
+    //判断是否为用户消息
     public boolean isUserMessage() {
         return "user".equals(role);
     }
 
-    /**
-     * 判断是否为助手消息
-     */
+    //判断是否为助手消息
     public boolean isAssistantMessage() {
         return "assistant".equals(role);
     }
 
-    /**
-     * 创建用户消息
-     */
+    //创建用户消息
     public static ChatMessage createUserMessage(String content) {
         ChatMessage message = new ChatMessage("user", content);
         return message;
     }
 
-    /**
-     * 创建助手消息
-     */
+
+     //创建助手消息
     public static ChatMessage createAssistantMessage(String content) {
         ChatMessage message = new ChatMessage("assistant", content);
         return message;
     }
 
-    /**
-     * 创建加载中消息
-     */
+    //创建加载中消息
+
     public static ChatMessage createLoadingMessage() {
         ChatMessage message = new ChatMessage("assistant", "正在分析，请稍候…");
         message.setLoading(true);

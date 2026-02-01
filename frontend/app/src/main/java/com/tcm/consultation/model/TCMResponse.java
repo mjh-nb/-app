@@ -7,7 +7,6 @@ import java.util.Map;
 /**
  * TCMResponse - 响应数据模型
  * 职责：解析后端返回的 JSON 响应
-
  * 修改 JSON 字段：修改 @SerializedName 注解的值
  */
 
@@ -48,16 +47,12 @@ public class TCMResponse {
         this.data = data;
     }
 
-    /**
-     * 判断请求是否成功
-     */
+    //判断请求是否成功
     public boolean isSuccess() {
         return "success".equals(status);
     }
 
-    /**
-     * 获取回复文本（便捷方法）
-     */
+    //获取回复文本（便捷方法）
     public String getReplyText() {
         if (data != null) {
             return data.getReplyText();
@@ -65,9 +60,7 @@ public class TCMResponse {
         return null;
     }
 
-    /**
-     * 获取新上下文（便捷方法）
-     */
+    //获取新上下文（便捷方法）
     public Map<String, Object> getNewContext() {
         if (data != null && data.isHasNewContext()) {
             return data.getNewContextToSave();
@@ -76,9 +69,7 @@ public class TCMResponse {
     }
 
 
-    /**
-     * Data - 响应数据内部类
-     */
+    //Data - 响应数据内部类
     public static class Data {
 
         @SerializedName("reply_text")

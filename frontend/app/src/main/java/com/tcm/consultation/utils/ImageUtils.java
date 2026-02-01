@@ -73,9 +73,7 @@ public final class ImageUtils {
         }
     }
 
-    /**
-     * 计算采样率
-     */
+    //计算采样率
     private static int calculateInSampleSize(BitmapFactory.Options options,
                                               int reqWidth, int reqHeight) {
         int height = options.outHeight;
@@ -95,9 +93,7 @@ public final class ImageUtils {
         return inSampleSize;
     }
 
-    /**
-     * 校正图片旋转角度（根据 EXIF 信息）
-     */
+    //校正图片旋转角度（根据 EXIF 信息）
     private static Bitmap correctRotation(Context context, Uri uri, Bitmap bitmap) {
         try {
             InputStream inputStream = context.getContentResolver().openInputStream(uri);
@@ -142,9 +138,7 @@ public final class ImageUtils {
         return bitmap;
     }
 
-    /**
-     * 缩放图片到指定最大尺寸
-     */
+    //缩放图片到指定最大尺寸
     private static Bitmap scaleBitmap(Bitmap bitmap, int maxWidth, int maxHeight) {
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();
@@ -168,9 +162,7 @@ public final class ImageUtils {
         return scaled;
     }
 
-    /**
-     * Bitmap 转换为 Base64 字符串
-     */
+    //Bitmap 转换为 Base64 字符串
     private static String bitmapToBase64(Bitmap bitmap) {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         bitmap.compress(Bitmap.CompressFormat.JPEG, Constants.IMAGE_QUALITY, outputStream);
@@ -180,9 +172,7 @@ public final class ImageUtils {
         return Base64.encodeToString(bytes, Base64.NO_WRAP);
     }
 
-    /**
-     * 从文件路径加载图片并转换为 Base64
-     */
+    //从文件路径加载图片并转换为 Base64
     public static String fileToBase64(String filePath) {
         try {
             BitmapFactory.Options options = new BitmapFactory.Options();

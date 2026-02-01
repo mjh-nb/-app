@@ -21,9 +21,7 @@ public final class UUIDUtils {
         return "profile_" + uuid.substring(0, 8) + "_" + uuid.substring(8, 16);
     }
 
-    /**
-     * 生成消息 ID
-     */
+    //生成消息 ID
     public static String generateMessageId() {
         return "msg_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
     }

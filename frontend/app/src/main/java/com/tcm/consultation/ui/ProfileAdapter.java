@@ -50,9 +50,7 @@ public class ProfileAdapter extends RecyclerView.Adapter<ProfileAdapter.ProfileV
         return profiles.size();
     }
 
-    /**
-     * 设置问诊人列表
-     */
+    //设置问诊人列表
     public void setProfiles(List<Profile> newProfiles) {
         profiles.clear();
         if (newProfiles != null) {
@@ -61,16 +59,12 @@ public class ProfileAdapter extends RecyclerView.Adapter<ProfileAdapter.ProfileV
         notifyDataSetChanged();
     }
 
-    /**
-     * 设置点击监听器
-     */
+    //设置点击监听器
     public void setOnProfileClickListener(OnProfileClickListener listener) {
         this.listener = listener;
     }
 
-    /**
-     * ViewHolder
-     */
+    //ViewHolder
     static class ProfileViewHolder extends RecyclerView.ViewHolder {
         private final TextView tvName;
         private final TextView tvInfo;
@@ -114,9 +108,7 @@ public class ProfileAdapter extends RecyclerView.Adapter<ProfileAdapter.ProfileV
         }
     }
 
-    /**
-     * 点击监听接口
-     */
+    //点击监听接口
     public interface OnProfileClickListener {
         void onProfileClick(Profile profile);
         void onProfileDelete(Profile profile);
